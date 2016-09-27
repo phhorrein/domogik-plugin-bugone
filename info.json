@@ -1,0 +1,94 @@
+{
+	"json_version": 2,
+    "identity": {
+        "author": "Freki", 
+        "author_email": "freki at frekilabs dot fr", 
+        "tags": ["bugone", "temperature", "humidity"], 
+        "dependencies": [
+            {   
+                "id": "pyserial (>=2.5)",
+                "type": "python"
+            }
+        ],
+        "description": "BugOne plugin", 
+        "domogik_min_version": "0.4.2", 
+        "name": "bugone", 
+        "type": "plugin", 
+        "version": "0.1"
+    }, 
+	 "configuration": [
+		 {
+			 "default": 0,
+			 "description": "Interval between each ping in seconds. If set to 0, let the bugOne daemon manage ping",
+			 "key": "interval",
+			 "name": "Interval",
+			 "required": false,
+			 "type": "integer"
+		 }
+	 ],
+	 "device_types": {
+		 "bugone.temperature": {
+			 "description": "Temperature reading from bugOne network",
+			 "id": "bugone.temperature",
+			 "name": "BugOne temperature",
+			 "commands": [],
+			 "sensors": ["temperature"],
+			 "parameters": [
+				 {
+					 "key": "nodeid",
+					 "xpl": "true",
+					 "description": "The node where we found this device",
+					 "type": "integer"
+				 },
+				 {
+					 "key": "devid",
+					 "xpl": "true",
+					 "description": "The device ID in the node",
+					 "type": "integer"
+				 }
+			 ]
+		 }
+	 },
+	 "xpl_stats": {
+		 "temperature": {
+			 "name": "Receive temperature",
+			 "schema": "sensor.basic",
+			 "parameters": {
+				 "static": [
+					 {
+						 "key": "type",
+						 "value": "temp"
+					 }
+				 ],
+				 "device": [],
+				 "dynamic": [
+					 {
+						 "key": "current",
+						 "ignore_values": "",
+						 "sensor": "temperature"
+					 }
+				 ]
+			 }
+		 }
+	 },
+	 "sensors": {
+		"temperature": {
+			"name": "Temperature",
+			"data_type": "DT_Temp",
+			"conversion": "",
+			"incremental": false,
+			"timeout": 7200,
+			"history": {
+				"store": true,
+				"duplicate": true,
+				"max": 0,
+				"expire": 0,
+				"round_value": 0
+			}
+		}
+			
+	 },
+	 "commands": {},
+	 "xpl_commands": {}
+
+}
