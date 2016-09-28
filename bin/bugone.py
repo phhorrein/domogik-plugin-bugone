@@ -39,8 +39,8 @@ from domogik.xpl.common.xplmessage import XplMessage
 from domogik.xpl.common.xplconnector import Listener
 from domogik.xpl.common.plugin import XplPlugin
 
-#from domogik_packages.plugin_bugone.lib.bugone import Bugone
-#from domogik_packages.plugin_bugone.lib.bugone import BugoneException
+from domogik_packages.plugin_bugone.lib.bugone import BugOne
+from domogik_packages.plugin_bugone.lib.bugone import BugOneException
 import threading
 import traceback
 
@@ -74,6 +74,7 @@ class BugOneManager(XplPlugin):
 
                 self.existing_devices[(nodeid,devid)] = dev
 
+
                 self.log.info("Device id " + str(devid) + " at node " + str(nodeid))
 
             except:
@@ -81,12 +82,31 @@ class BugOneManager(XplPlugin):
 
         # Initialize bugOne manager
 
-#        self.bugOne_manager = BugOne()
+        self.bugOne_manager = BugOne(self.log,self.send_xpl,self.get_stop,self.existing_devices,self.register_thread)
 
-#        self.recv_thread = threading.Thread(None, bugOne.listen,"recv",(self.get_stop(),), {})
+        self.recv_thread = threading.Thread(None, self.bugOne_manager.listen,"bugone_listen",(self.get_stop(),), {})
 
+        self.register_thread(self.recv_thread)
+        self.recv_thread.start()
         self.ready()
         self.log.info("Plugin ready :)")
+
+    def send_xpl(self, message = None, schema = None, data = {}):
+        """ Send xPL message on network
+            Copied from RFXCom implementation
+        """
+        if message != None:
+            self.log.debug(u"send_xpl : send full message : {0}".format(message))
+            self.myxpl.send(message)
+
+        else:
+            self.log.debug(u"send_xpl : Send xPL message xpl-trig : schema:{0}, data:{1}".format(schema, data))
+            msg = XplMessage()
+            msg.set_type("xpl-trig")
+            msg.set_schema(schema)
+            for key in data:
+                msg.add_data({key : data[key]})
+            self.myxpl.send(msg)
 
 
 
