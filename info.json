@@ -30,19 +30,40 @@
 		 "bugone.temperature": {
 			 "description": "Temperature reading from bugOne network",
 			 "id": "bugone.temperature",
-			 "name": "BugOne temperature",
+			 "name": "Temperature",
 			 "commands": [],
 			 "sensors": ["temperature"],
 			 "parameters": [
 				 {
 					 "key": "nodeid",
-					 "xpl": "true",
+					 "xpl": false,
 					 "description": "The node where we found this device",
 					 "type": "integer"
 				 },
 				 {
 					 "key": "devid",
-					 "xpl": "true",
+					 "xpl": false,
+					 "description": "The device ID in the node",
+					 "type": "integer"
+				 }
+			 ]
+		 },
+		 "bugone.humidity": {
+			 "description": "Humidity reading from bugOne network",
+			 "id": "bugone.humidity",
+			 "name": "Humidity",
+			 "commands": [],
+			 "sensors": ["humidity"],
+			 "parameters": [
+				 {
+					 "key": "nodeid",
+					 "xpl": false,
+					 "description": "The node where we found this device",
+					 "type": "integer"
+				 },
+				 {
+					 "key": "devid",
+					 "xpl": false,
 					 "description": "The device ID in the node",
 					 "type": "integer"
 				 }
@@ -69,12 +90,46 @@
 					 }
 				 ]
 			 }
+		 },
+		 "humidity": {
+			 "name": "Receive humidity",
+			 "schema": "sensor.basic",
+			 "parameters": {
+				 "static": [
+					 {
+						 "key": "type",
+						 "value": "humidity"
+					 }
+				 ],
+				 "device": [],
+				 "dynamic": [
+					 {
+						 "key": "current",
+						 "ignore_values": "",
+						 "sensor": "humidity"
+					 }
+				 ]
+			 }
 		 }
 	 },
 	 "sensors": {
 		"temperature": {
 			"name": "Temperature",
 			"data_type": "DT_Temp",
+			"conversion": "",
+			"incremental": false,
+			"timeout": 7200,
+			"history": {
+				"store": true,
+				"duplicate": true,
+				"max": 0,
+				"expire": 0,
+				"round_value": 0
+			}
+		},
+		"humidity": {
+			"name": "Humidity",
+			"data_type": "DT_Humidity",
 			"conversion": "",
 			"incremental": false,
 			"timeout": 7200,
