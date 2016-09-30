@@ -41,7 +41,9 @@ import threading
 import time
 from Queue import Queue, Empty, Full
 import serial as serial
+from domogik.xpl.common.xplconnector import XplTimer
 import domogik.tests.common.testserial as testserial
+import glob, os, string
 
 PACKET_HELLO  = 0x01
 PACKET_PING   = 0x02
@@ -65,19 +67,21 @@ class BugOneException(Exception):
 
 class BugOne():
 
-    def __init__(self, log, cb_send_xpl, stop, registered_devices, cb_register_thread, fake_device = None):
+    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, cb_register_thread, fake_device = None):
         self.log = log
         self.stop = stop
 
         # fake or real device
         self.fake_device = fake_device
+        self.bugone_port = bugone_port
+        self.autoreconnect = autoreconnect
 
         self.cb_send_xpl = cb_send_xpl
         self.cb_register_thread = cb_register_thread
 
         # serial device
         self.registered_devices = registered_devices
-        self.bugone = serial.Serial("/dev/ttyUSB0", baudrate = 38400, timeout = 1)
+        self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
 
 
     def listen(self, stop):
@@ -89,11 +93,38 @@ class BugOne():
         try:
             while not stop.isSet():
                 self.read()
+            return
         except serial.SerialException:
             error = "Error while reading rfxcom device (disconnected ?) : %s" % traceback.format_exc()
             self.log.error(u"{0}".format(error))
-            # TODO : raise for using self.force_leave() in bin ?
-            return
+            if self.autoreconnect:
+                """ Linux might have renamed the port. 
+                We make the hypothesis that only one serial device with the
+                corresponding pattern exist in the system. This will change when
+                the bugone project for sniffer will include a status exchange
+                """
+                #TODO: add a timer
+                while not stop.isSet():
+                    self.log.warning("Attempting to reconnect...")
+                    portlist = glob.glob(string.rstrip(self.bugone_port,"0123456789") + "*")
+                    if not (portlist == []):
+                        self.bugone_port = portlist[0]
+                        self.log.info("Found new port with correct pattern: " + self.bugone_port)
+                        time.sleep(1)
+                        self.log.info("Reconnecting to sniffer...")
+                        self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+                        self.log.info("Reconnection done! :)")
+                        #This is ugly (useless recurrence)
+                        self.listen(stop)
+
+                        
+
+
+                
+                
+
+                # TODO : raise for using self.force_leave() in bin ?
+                return
 
     def read(self):
         """ Read bugOne device once

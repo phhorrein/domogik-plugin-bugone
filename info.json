@@ -24,6 +24,22 @@
 			 "name": "Interval",
 			 "required": false,
 			 "type": "integer"
+		 },
+		 {
+			 "default": "/dev/ttyUSB0",
+			 "description": "Name of the serial port connected to the bugOne sniffer",
+			 "key": "bugone_port",
+			 "name": "bugOne serial port",
+			 "required": true,
+			 "type": "string"
+		 },
+		 {
+			 "default": true,
+			 "description": "Check this if you want the plugin to automatically search which port is used in case of port renaming when the sniffer has been disconnected",
+			 "key": "bugone_reconnect",
+			 "name": "Automatically reconnect to sniffer?",
+			 "required": true,
+			 "type": "boolean"
 		 }
 	 ],
 	 "device_types": {
