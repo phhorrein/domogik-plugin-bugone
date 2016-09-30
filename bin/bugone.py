@@ -71,9 +71,20 @@ class BugOneManager(XplPlugin):
             try: 
                 nodeid = self.get_parameter(dev,"nodeid")
                 devid = self.get_parameter(dev,"devid")
-
-                self.existing_devices[(nodeid,devid)] = dev
-
+                """ Get first feature key 
+                This is used to get the name of the device: it is stored in the
+                features, but common between them
+                """
+                feat = dev['xpl_stats'].iterkeys().next()
+                name = self.get_parameter_for_feature(dev,"xpl_stats",feat,"device")
+                """ Get name for first feature
+                Devices in bugOne plugin are either simple value devices or
+                management devices. Management devices are known and will not
+                use this parameter
+                """
+                # Get name for the first feature. 
+                sensortype = self.get_parameter_for_feature(dev,"xpl_stats",feat,"type")
+                self.existing_devices[(nodeid,devid)] = { "name" : name, "sensortype": sensortype }
 
                 self.log.info("Device id " + str(devid) + " at node " + str(nodeid))
 

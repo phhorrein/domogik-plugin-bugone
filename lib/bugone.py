@@ -133,8 +133,17 @@ class BugOne():
             for (srcDevice, destDevice, value) in values:
                 self.log.info("- (%s.%s) -> (%s.%s) = %s" % \
                     (srcNodeId, srcDevice, destNodeId, destDevice, value))
+                if (srcNodeId,srcDevice) in self.registered_devices:
+                    dev = self.registered_devices[(srcNodeId,srcDevice)]
+                    self.report_status(dev,value)
         else:
             self.log.info([hex(ord(i)) for i in self.getPacketData(message)])
+
+    def report_status(self, device, value):
+        self.cb_send_xpl(schema = "sensor.basic", 
+                data = {"device" : device["name"],
+                    "type" : device["sensortype"],
+                    "current" : float(value)/10})
 
 
     def getPacketSrc(self, message):

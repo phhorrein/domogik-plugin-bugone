@@ -35,6 +35,12 @@
 			 "sensors": ["temperature"],
 			 "parameters": [
 				 {
+					 "key": "device",
+					 "xpl": true,
+					 "description": "The name of this device",
+					 "type": "string"
+				 },
+				 {
 					 "key": "nodeid",
 					 "xpl": false,
 					 "description": "The node where we found this device",
@@ -55,6 +61,12 @@
 			 "commands": [],
 			 "sensors": ["humidity"],
 			 "parameters": [
+				 {
+					 "key": "device",
+					 "xpl": true,
+					 "description": "The name of this device",
+					 "type": "string"
+				 },
 				 {
 					 "key": "nodeid",
 					 "xpl": false,
