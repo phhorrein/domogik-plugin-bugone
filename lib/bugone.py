@@ -81,7 +81,41 @@ class BugOne():
 
         # serial device
         self.registered_devices = registered_devices
-        self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+        self.bugone_opened = False
+        self.open(self.stop())
+#       self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+
+
+    def open(self,stop):
+        """ Open the sniffer port
+        if self.autoreconnect is set to True, we may not have the correct port
+        number. We will need to look for existing ports with the same pattern. 
+        Otherwise, only open and throw an exception if it doesn't work
+        """
+        try: 
+            if self.autoreconnect:
+                while not stop.isSet():
+                    self.log.info("Attempting to connect to bugOne sniffer ...")
+                    portlist = glob.glob(string.rstrip(self.bugone_port,"0123456789") + "*")
+                    if not (portlist == []):
+                        self.bugone_port = portlist[0]
+                        self.log.info("Found new port with correct pattern: " + self.bugone_port)
+                        time.sleep(1)
+                        self.log.info("Reconnecting to sniffer...")
+                        self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+                        self.bugone_opened = True
+                        self.log.info("Reconnection done! :)")
+                        return
+                    time.sleep(2)
+            else:
+                self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+                self.bugone_opened = True
+                self.connect_timer.stop()
+        except:
+            error = "Error while connecting to sniffer device: %s" % traceback.format_exc()
+            self.log.error(u"{0}".format(error))
+            self.bugone_opened = False
+            return
 
 
     def listen(self, stop):
@@ -90,41 +124,25 @@ class BugOne():
         """
         self.log.info(u"**** Start listening to bugOne network****")
         # infinite
-        try:
-            while not stop.isSet():
-                self.read()
-            return
-        except serial.SerialException:
-            error = "Error while reading rfxcom device (disconnected ?) : %s" % traceback.format_exc()
-            self.log.error(u"{0}".format(error))
-            if self.autoreconnect:
-                """ Linux might have renamed the port. 
-                We make the hypothesis that only one serial device with the
-                corresponding pattern exist in the system. This will change when
-                the bugone project for sniffer will include a status exchange
-                """
-                #TODO: add a timer
+        while True:
+            try:
                 while not stop.isSet():
-                    self.log.warning("Attempting to reconnect...")
-                    portlist = glob.glob(string.rstrip(self.bugone_port,"0123456789") + "*")
-                    if not (portlist == []):
-                        self.bugone_port = portlist[0]
-                        self.log.info("Found new port with correct pattern: " + self.bugone_port)
-                        time.sleep(1)
-                        self.log.info("Reconnecting to sniffer...")
-                        self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
-                        self.log.info("Reconnection done! :)")
-                        #This is ugly (useless recurrence)
-                        self.listen(stop)
-
-                        
-
-
-                
-                
-
-                # TODO : raise for using self.force_leave() in bin ?
+                    if self.bugone_opened: 
+                        self.read()
+                    elif self.autoreconnect:
+                        self.open(stop)
+                    else:
+                        return
                 return
+            except serial.SerialException:
+                error = "Error while reading rfxcom device (disconnected ?) : %s" % traceback.format_exc()
+                self.log.error(u"{0}".format(error))
+                self.bugone_opened = False
+                if self.autoreconnect:
+                    self.open(stop)
+                    continue
+                else:
+                    return
 
     def read(self):
         """ Read bugOne device once
