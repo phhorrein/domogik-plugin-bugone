@@ -43,6 +43,7 @@ from Queue import Queue, Empty, Full
 import serial as serial
 from domogik.xpl.common.xplconnector import XplTimer
 import domogik.tests.common.testserial as testserial
+import domogik_packages.plugin_bugone.lib.bugoneprotocol as bugoneprotocol
 import glob, os, string
 
 PACKET_HELLO  = 0x01
@@ -51,6 +52,7 @@ PACKET_PONG   = 0x03
 PACKET_GET    = 0x04
 PACKET_SET    = 0x05
 PACKET_VALUES = 0x06
+PACKET_SLEEP  = 0x07
 
 
 class BugOneException(Exception):
@@ -65,11 +67,39 @@ class BugOneException(Exception):
     def __str__(self):
         return repr(self.value)
 
+class BugOneNode():
+
+    def __init__(self, nodeid, timeout, manager):
+        self._nodeid = nodeid
+        self._xpl_manager = manager
+        self._status = False
+        self._timeout_interval = timeout
+        #self._timeout = XplTimer(timeout, self.timeout, manager)
+
+    def disable(self):
+        #if self._timer_running:
+        #    self._timeout.stop()
+        self._status = False
+
+    def timeout(self):
+        self._status = False
+
+    def enable(self): 
+        #if self._timer_running:
+        #    self._timeout.stop()
+        #self._timeout.start()
+        self._status = True
+
+    def status(self):
+        return self._status
+
+
 class BugOne():
 
-    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, cb_register_thread, fake_device = None):
+    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, cb_register_thread, manager, fake_device = None):
         self.log = log
         self.stop = stop
+        self.manager = manager
 
         # fake or real device
         self.fake_device = fake_device
@@ -84,6 +114,7 @@ class BugOne():
         self.bugone_opened = False
         self.open(self.stop())
 #       self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
+        self._nodes = {}
 
 
     def open(self,stop):
@@ -144,6 +175,12 @@ class BugOne():
                 else:
                     return
 
+	def send(self, message):
+		if len(message) > 255:
+			raise Exception("Message is too long")
+		self.bugone.write(chr(len(message)) + message)
+		self.bugone.flush()
+
     def read(self):
         """ Read bugOne device once
             Inspired from the Sniffer Python code
@@ -166,138 +203,49 @@ class BugOne():
             self._process_received_data(data)
 
     def _process_received_data(self, message):
-        messageType = self.getPacketType(message)
-        srcNodeId = self.getPacketSrc(message)
-        destNodeId = self.getPacketDest(message)
-        counter = self.getPacketCounter(message)
+        messageType = bugoneprotocol.getPacketType(message)
+        srcNodeId = bugoneprotocol.getPacketSrc(message)
+        destNodeId = bugoneprotocol.getPacketDest(message)
+        counter = bugoneprotocol.getPacketCounter(message)
         self.log.info (u"Message [%s] from %s to %s" % (counter, hex(srcNodeId), hex(destNodeId)))
-        if messageType == PACKET_HELLO:
+        if messageType == bugoneprotocol.PACKET_HELLO:
             self.log.info("Hello")
-        elif messageType == PACKET_PING:
+            self._update_status(srcNodeId,True)
+        elif messageType == bugoneprotocol.PACKET_PING:
             self.log.info("Ping")
-        elif messageType == PACKET_PONG:
+            self._update_status(srcNodeId,True)
+        elif messageType == bugoneprotocol.PACKET_PONG:
             self.log.info("Pong")
-        elif messageType == PACKET_VALUES:
-            values = self.readValues(self.getPacketData(message))
+            self._update_status(srcNodeId,True)
+        elif messageType == bugoneprotocol.PACKET_VALUES:
+            self._update_status(srcNodeId,True)
+            values = bugoneprotocol.readValues(bugoneprotocol.getPacketData(message))
             for (srcDevice, destDevice, value) in values:
                 self.log.info("- (%s.%s) -> (%s.%s) = %s" % \
                     (srcNodeId, srcDevice, destNodeId, destDevice, value))
                 if (srcNodeId,srcDevice) in self.registered_devices:
                     dev = self.registered_devices[(srcNodeId,srcDevice)]
                     self.report_status(dev,value)
+        elif messageType == PACKET_SLEEP:
+            self.log.info("Sleep packet")
+            self._update_status(srcNodeId,False)
         else:
-            self.log.info([hex(ord(i)) for i in self.getPacketData(message)])
+            self.log.info([hex(ord(i)) for i in bugoneprotocol.getPacketData(message)])
+
+    def _update_status(self,nodeid,status):
+        if nodeid not in self._nodes:
+            self._nodes[nodeid] = BugOneNode(nodeid,10,self.manager)
+        if status: 
+            if not self._nodes[nodeid].status():
+                self.log.info(u"*** Node %s waking up...***" % nodeid)
+            self._nodes[nodeid].enable()
+        else:
+            if self._nodes[nodeid].status():
+                self.log.info(u"*** Node %s going to sleep...***" % nodeid)
+            self._nodes[nodeid].disable()
 
     def report_status(self, device, value):
         self.cb_send_xpl(schema = "sensor.basic", 
                 data = {"device" : device["name"],
                     "type" : device["sensortype"],
                     "current" : float(value)/10})
-
-
-    def getPacketSrc(self, message):
-        return ord(message[0])
-
-    def getPacketDest(self, message):
-        return ord(message[1])
-
-    def getPacketRouter(self, message):
-        return ord(message[2])
-
-    def getPacketType(self, message):
-        return ord(message[3])
-
-    def getPacketCounter(self, message):
-        return self.readInteger(message[4:6])
-
-    def getPacketData(self, message):
-        return message[6:]
-
-    ### Parse data ###
-
-    def readValues(self, data):
-        values = []
-        while len(data) > 3:
-            srcDevice = ord(data[0])
-            destDevice = ord(data[1])
-            valueType = data[2]
-            value = None
-            if valueType == 'I':
-                value = self.readInteger(data[3:5])
-                data = data[5:]
-            elif valueType == 'S':
-                count = ord(data[3])
-                value = data[4:4+count]
-                data = data[4+count:]
-            else:
-                break
-            values.append((srcDevice, destDevice, value))
-        return values
-
-    def writeValues(self, values):
-        data = ""
-        for (srcDeviceId, destDeviceId, value) in values:
-            data += chr(srcDeviceId)
-            data += chr(destDeviceId)
-            if type(value) is int:
-                data += 'I' + self.writeInteger(value)
-            elif type(value) is str:
-                data += 'S' + chr(len(value)) + value
-        return data
-
-    def writeDevices(self, devices):
-        data = ""
-        for (srcDeviceId, destDeviceId) in devices:
-            data += chr(srcDeviceId)
-            data += chr(destDeviceId)
-        return data
-
-    ### Send packet ###
-
-    #def hello(self, sniffer):
-    #    sniffer.send(buildPacket(0xFF, PACKET_HELLO))
-
-    #def ping(self, destNodeId, sniffer):
-    #    sniffer.send(buildPacket(destNodeId, PACKET_PING))
-
-    #def pong(self, destNodeId, sniffer):
-    #    sniffer.send(buildPacket(destNodeId, PACKET_PONG))
-
-    #def setValue(self, destNodeId, srcDeviceId, destDeviceId, value, sniffer):
-    #    data = writeValues([(srcDeviceId, destDeviceId, value),(0xFF,0xFF,0)])
-    #    sniffer.send(buildPacket(destNodeId, PACKET_SET, data=data))
-
-    #def getValue(self, destNodeId, srcDeviceId, destDeviceId, sniffer):
-    #    data = writeDevices([(srcDeviceId, destDeviceId),(0xFF,0xFF)])
-    #    sniffer.send(buildPacket(destNodeId, PACKET_GET, data=data))
-    #    message = sniffer.waitForMessage()
-    #    if message and getPacketType(message) == PACKET_VALUES:
-    #        values = readValues(getPacketData(message))
-    #        return values[0][2]
-    #    return None
-
-    #### TOOLS ###
-
-    ## return packet formatted according bugOne protocol (do not send)
-    ## packetType can be: 1 Hello, 2 Ping, 3 Pong, 4 Get, 5 Set, 6 Values
-    #def buildPacket(self, destNodeId, packetType, srcNodeId = 0, lastCounter = 0, data = None):
-    #    message  = chr(srcNodeId)   # Src
-    #    message += chr(destNodeId)  # Dest
-    #    message += chr(0)           # Router
-    #    message += chr(packetType)  # Type
-    #    message += writeInteger(lastCounter) # Counter
-    #    if data:
-    #        message += data
-    #    return message
-
-    def readInteger(self, bytes, bigEndian = True):
-        res = 0
-        if bigEndian: bytes = bytes[::-1]
-        for b in bytes:
-            res = res << 8
-            res += ord(b)
-        return res
-
-    def writeInteger(self, value):
-        return chr(value & 0x00FF) + chr((value & 0xFF00) >> 8)
-

@@ -95,7 +95,7 @@ class BugOneManager(XplPlugin):
 
         # Initialize bugOne manager
 
-        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.register_thread)
+        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.register_thread, self.myxpl)
 
         self.recv_thread = threading.Thread(None, self.bugOne_manager.listen,"bugone_listen",(self.get_stop(),), {})
 
