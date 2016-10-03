@@ -14,7 +14,7 @@
         "domogik_min_version": "0.4.2", 
         "name": "bugone", 
         "type": "plugin", 
-        "version": "0.1"
+        "version": "0.2alpha"
     }, 
 	 "configuration": [
 		 {
@@ -96,6 +96,33 @@
 					 "type": "integer"
 				 }
 			 ]
+		 },
+		 "bugone.node": {
+			 "description": "Node management for bugOne network",
+			 "id": "bugone.node",
+			 "name": "BugNode",
+			 "commands": [],
+			 "sensors" : ["ping"],
+			 "parameters": [
+				 {
+					 "key": "device",
+					 "xpl": true,
+					 "description": "The name of this node",
+					 "type": "string"
+				 },
+				 {
+					 "key": "nodeid",
+					 "xpl": false,
+					 "description": "The ID of the node to check",
+					 "type": "integer"
+				 },
+				 {
+					 "key": "interval",
+					 "xpl": false,
+					 "description": "The ping interval",
+					 "type": "integer"
+				 }
+			 ]
 		 }
 	 },
 	 "xpl_stats": {
@@ -138,6 +165,26 @@
 					 }
 				 ]
 			 }
+		 },
+		 "ping": {
+			 "name": "Ping status",
+			 "schema": "sensor.basic",
+			 "parameters": {
+				 "static": [
+					 {
+						 "key": "type",
+						 "value": "input"
+					 }
+				 ],
+				 "device": [],
+				 "dynamic": [
+					 {
+						 "key": "current",
+						 "ignore_values": "",
+						 "sensor": "ping"
+					 }
+				 ]
+			 }
 		 }
 	 },
 	 "sensors": {
@@ -164,6 +211,20 @@
 			"history": {
 				"store": true,
 				"duplicate": true,
+				"max": 0,
+				"expire": 0,
+				"round_value": 0
+			}
+		},
+		"ping": {
+			"name": "Node status",
+			"data_type": "DT_Switch",
+			"conversion": "from_low_high_to_DT_Switch",
+			"incremental": false,
+			"timeout": "0",
+			"history": {
+				"store": true,
+				"duplicate": false,
 				"max": 0,
 				"expire": 0,
 				"round_value": 0
