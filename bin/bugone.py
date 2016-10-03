@@ -68,39 +68,51 @@ class BugOneManager(XplPlugin):
         # from bugone, to which device must be signalled)
 
         self.existing_devices = {}
+        self.managed_nodes = {}
 
         for dev in self.devices:
             try: 
-                nodeid = self.get_parameter(dev,"nodeid")
-                devid = self.get_parameter(dev,"devid")
-                """ Get first feature key 
-                This is used to get the name of the device: it is stored in the
-                features, but common between them
-                """
-                feat = dev['xpl_stats'].iterkeys().next()
-                name = self.get_parameter_for_feature(dev,"xpl_stats",feat,"device")
-                """ Get name for first feature
-                Devices in bugOne plugin are either simple value devices or
-                management devices. Management devices are known and will not
-                use this parameter
-                """
-                # Get name for the first feature. 
-                sensortype = self.get_parameter_for_feature(dev,"xpl_stats",feat,"type")
-                self.existing_devices[(nodeid,devid)] = { "name" : name, "sensortype": sensortype }
+                devtype = dev["device_type_id"]
+                if devtype == "bugone.temperature" or devtype == "bugone.humidity":
+                    nodeid = self.get_parameter(dev,"nodeid")
+                    devid = self.get_parameter(dev,"devid")
+                    """ Get first feature key 
+                    This is used to get the name of the device: it is stored in the
+                    features, but common between them
+                    """
+                    feat = dev['xpl_stats'].iterkeys().next()
+                    name = self.get_parameter_for_feature(dev,"xpl_stats",feat,"device")
+                    """ Get name for first feature
+                    Devices in bugOne plugin are either simple value devices or
+                    management devices. Management devices are known and will not
+                    use this parameter
+                    """
+                    # Get name for the first feature. 
+                    sensortype = self.get_parameter_for_feature(dev,"xpl_stats",feat,"type")
+                    self.existing_devices[(nodeid,devid)] = { "name" : name, "sensortype": sensortype }
 
-                self.log.info("Device id " + str(devid) + " at node " + str(nodeid))
-
+                    self.log.info("Device id " + str(devid) + " at node " + str(nodeid))
+                elif devtype == "bugone.node":
+                    nodeid = self.get_parameter(dev,"nodeid")
+                    interval = self.get_parameter(dev,"interval")
+                    feat = dev['xpl_stats'].iterkeys().next()
+                    name = self.get_parameter_for_feature(dev,"xpl_stats",feat,"device")
+                    self.managed_nodes[nodeid] = { "name": name, "interval": interval}
+                    self.log.info(u"***Managing node " + str(nodeid) + " with name " + name + "***")
             except:
                 self.log.error(traceback.format_exc())
 
         # Initialize bugOne manager
 
-        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.register_thread, self.myxpl)
+        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.managed_nodes,self.register_thread, self.myxpl)
 
         self.recv_thread = threading.Thread(None, self.bugOne_manager.listen,"bugone_listen",(self.get_stop(),), {})
-
         self.register_thread(self.recv_thread)
+        self.send_thread = threading.Thread(None, self.bugOne_manager.sender,"bugone_sender",(self.get_stop(),), {})
+        self.register_thread(self.send_thread)
         self.recv_thread.start()
+        self.send_thread.start()
+
         self.ready()
         self.log.info("Plugin ready :)")
 

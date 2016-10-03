@@ -39,6 +39,7 @@ import binascii
 import traceback
 import threading
 import time
+from collections import deque
 from Queue import Queue, Empty, Full
 import serial as serial
 from domogik.xpl.common.xplconnector import XplTimer
@@ -69,11 +70,27 @@ class BugOneException(Exception):
 
 class BugOneNode():
 
-    def __init__(self, nodeid, timeout, manager):
+    def __init__(self, nodeid, timeout, log, manager, send_queue, interval = 0, name = ""):
         self._nodeid = nodeid
         self._xpl_manager = manager
         self._status = False
         self._timeout_interval = timeout
+        self._sniffer_queue = send_queue
+        self._message_queue = deque()
+        self.log = log
+        self._interval = interval
+        self._name = ""
+        self._ping_running = False
+        if name == "":
+            self._name = "node"+str(nodeid)
+        else:
+            self._name = name
+        if interval != 0:
+            self.pingtimer = XplTimer(interval*60, self.ping, manager)
+            self._ping_running = True
+        self.log.info(u"*** Initialized BugoneNode for node %s with name %s and interval %s***" % (str(nodeid), self._name, str(interval)))
+        if self._ping_running:
+            self.pingtimer.start()
         #self._timeout = XplTimer(timeout, self.timeout, manager)
 
     def disable(self):
@@ -89,14 +106,33 @@ class BugOneNode():
         #    self._timeout.stop()
         #self._timeout.start()
         self._status = True
+        while len(self._message_queue) > 0:
+            self._sniffer_queue.put(self._message_queue.popleft())
 
     def status(self):
         return self._status
 
+    def ping(self):
+        self.log.info(u"*** Sending ping to node %s ***" % self._name)
+        message = bugoneprotocol.buildPacket(int(self._nodeid), PACKET_PING)
+        self.send(message)
+
+    def send(self,message):
+        """ Process message to send (already build)
+        If available, send immediately, or store for later send
+        """
+        self.log.info(u"*** Node %s: Message to send: %s" % (str(self._nodeid), str(ord(message[3]))))
+        if self._status:
+            self.log.info(u"*** Node %s up, putting in the send queue ***" % str(self._nodeid))
+            self._sniffer_queue.put(message)
+        else:
+            self.log.info(u"*** Node %s down, delaying message sending ***" % str(self._nodeid))
+            self._message_queue.append(message)
+
 
 class BugOne():
 
-    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, cb_register_thread, manager, fake_device = None):
+    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, managed_nodes, cb_register_thread, manager, fake_device = None):
         self.log = log
         self.stop = stop
         self.manager = manager
@@ -109,12 +145,18 @@ class BugOne():
         self.cb_send_xpl = cb_send_xpl
         self.cb_register_thread = cb_register_thread
 
+        self.send_queue = Queue()
+
         # serial device
         self.registered_devices = registered_devices
+        self.managed_nodes = managed_nodes
         self.bugone_opened = False
         self.open(self.stop())
 #       self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
         self._nodes = {}
+        for i in self.managed_nodes:
+            self._nodes[i] = BugOneNode(int(i),10,self.log,self.manager,self.send_queue,interval = self.managed_nodes[i]["interval"],name = self.managed_nodes[i]["name"])
+
 
 
     def open(self,stop):
@@ -175,11 +217,39 @@ class BugOne():
                 else:
                     return
 
-	def send(self, message):
-		if len(message) > 255:
-			raise Exception("Message is too long")
-		self.bugone.write(chr(len(message)) + message)
-		self.bugone.flush()
+    def sender(self,stop):
+        """ Sender thread function
+        It waits on a Queue and send data as soon as the sniffer is ready and there is data to send
+        """
+        self.log.info(u"**** Start sender to bugOne network****")
+        while True:
+            try:
+                while not stop.isSet():
+                    message = self.send_queue.get(True)
+                    self.log.info(u"***Message to send in the queue***")
+                    if self.bugone_opened: 
+                        self.send(message)
+                    else:
+                        self.log.error(u"Message to send, but no sniffer...")
+                        return
+                return
+            except serial.SerialException:
+                error = "Error while reading rfxcom device (disconnected ?) : %s" % traceback.format_exc()
+                self.log.error(u"{0}".format(error))
+                self.bugone_opened = False
+                if self.autoreconnect:
+                    self.open(stop)
+                    continue
+                else:
+                    return
+
+    def send(self, message):
+        if len(message) > 255:
+            raise Exception("Message is too long")
+        self.log.info(u"***Sending message to sniffer: %s***" % str(ord(message[3])))
+        sent = self.bugone.write(chr(len(message)) + message)
+        self.log.info(u"***Sent %s chars***" % sent)
+        self.bugone.flush()
 
     def read(self):
         """ Read bugOne device once
@@ -234,7 +304,7 @@ class BugOne():
 
     def _update_status(self,nodeid,status):
         if nodeid not in self._nodes:
-            self._nodes[nodeid] = BugOneNode(nodeid,10,self.manager)
+            self._nodes[nodeid] = BugOneNode(int(nodeid),10,self.log,self.manager,self.send_queue)
         if status: 
             if not self._nodes[nodeid].status():
                 self.log.info(u"*** Node %s waking up...***" % nodeid)

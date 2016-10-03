@@ -9,6 +9,7 @@ PACKET_PONG   = 0x03
 PACKET_GET    = 0x04
 PACKET_SET    = 0x05
 PACKET_VALUES = 0x06
+PACKET_SLEEP = 0x06
 
 ### Read packet ###
 
