@@ -70,7 +70,7 @@ class BugOneException(Exception):
 
 class BugOneNode():
 
-    def __init__(self, nodeid, timeout, log, manager, send_queue, interval = 0, name = ""):
+    def __init__(self, nodeid, timeout, log, manager, send_queue, callback_status, interval = 0, name = ""):
         self._nodeid = nodeid
         self._xpl_manager = manager
         self._status = False
@@ -78,19 +78,18 @@ class BugOneNode():
         self._sniffer_queue = send_queue
         self._message_queue = deque()
         self.log = log
-        self._interval = interval
+        self._interval = timeout * 60
         self._name = ""
-        self._ping_running = False
+        self._last_timeout = 0
+        self._callback_status = callback_status
         if name == "":
             self._name = "node"+str(nodeid)
         else:
             self._name = name
-        if interval != 0:
-            self.pingtimer = XplTimer(interval*60, self.ping, manager)
-            self._ping_running = True
         self.log.info(u"*** Initialized BugoneNode for node %s with name %s and interval %s***" % (str(nodeid), self._name, str(interval)))
-        if self._ping_running:
-            self.pingtimer.start()
+        if self._timeout_interval > 0:
+            self._timeout_timer = XplTimer(60, self.timeout, manager)
+            self._timeout_timer.start()
         #self._timeout = XplTimer(timeout, self.timeout, manager)
 
     def disable(self):
@@ -98,24 +97,29 @@ class BugOneNode():
         #    self._timeout.stop()
         self._status = False
 
+    def init_timeout(self):
+        self._last_timeout = time.time()
+        self.log.info("Last Timeout : %s" % str(self._last_timeout))
+        self._callback_status(self._nodeid, True)
+
     def timeout(self):
-        self._status = False
+        if (time.time() - self._last_timeout) > self._timeout_interval: 
+            self.log.info("Last seen : %s" % str(time.time() - self._last_timeout))
+            self._callback_status(self._nodeid, False)
+        else:
+            self._callback_status(self._nodeid, True)
 
     def enable(self): 
         #if self._timer_running:
         #    self._timeout.stop()
         #self._timeout.start()
         self._status = True
+        self.init_timeout()
         while len(self._message_queue) > 0:
             self._sniffer_queue.put(self._message_queue.popleft())
 
     def status(self):
         return self._status
-
-    def ping(self):
-        self.log.info(u"*** Sending ping to node %s ***" % self._name)
-        message = bugoneprotocol.buildPacket(int(self._nodeid), PACKET_PING)
-        self.send(message)
 
     def send(self,message):
         """ Process message to send (already build)
@@ -155,7 +159,7 @@ class BugOne():
 #       self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
         self._nodes = {}
         for i in self.managed_nodes:
-            self._nodes[i] = BugOneNode(int(i),10,self.log,self.manager,self.send_queue,interval = self.managed_nodes[i]["interval"],name = self.managed_nodes[i]["name"])
+            self._nodes[i] = BugOneNode(int(i),self.managed_nodes[i]["interval"],self.log,self.manager,self.send_queue,self.send_node_status, interval = self.managed_nodes[i]["interval"],name = self.managed_nodes[i]["name"])
 
 
 
@@ -304,7 +308,8 @@ class BugOne():
 
     def _update_status(self,nodeid,status):
         if nodeid not in self._nodes:
-            self._nodes[nodeid] = BugOneNode(int(nodeid),10,self.log,self.manager,self.send_queue)
+            # Default timeout is 1hour
+            self._nodes[nodeid] = BugOneNode(int(nodeid),60,self.log,self.manager,self.send_queue,self.send_node_status)
         if status: 
             if not self._nodes[nodeid].status():
                 self.log.info(u"*** Node %s waking up...***" % nodeid)
@@ -314,6 +319,15 @@ class BugOne():
                 self.log.info(u"*** Node %s going to sleep...***" % nodeid)
             self._nodes[nodeid].disable()
 
+    def send_node_status(self, nodeid, value): 
+        if value: 
+            cur = "high"
+        else:
+            cur = "low"
+        self.cb_send_xpl(schema = "sensor.basic",
+                data = {"device": self.managed_nodes[nodeid]["name"],
+                    "type": "input",
+                    "current": cur})
     def report_status(self, device, value):
         self.cb_send_xpl(schema = "sensor.basic", 
                 data = {"device" : device["name"],
