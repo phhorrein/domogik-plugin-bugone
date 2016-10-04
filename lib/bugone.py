@@ -74,7 +74,7 @@ class BugOneNode():
         self._nodeid = nodeid
         self._xpl_manager = manager
         self._status = False
-        self._timeout_interval = timeout
+        self._timeout_interval = timeout * 60 
         self._sniffer_queue = send_queue
         self._message_queue = deque()
         self.log = log
