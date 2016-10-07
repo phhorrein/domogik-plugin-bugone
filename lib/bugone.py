@@ -221,7 +221,7 @@ class BugOne():
                         return
                 return
             except serial.SerialException:
-                error = "Error while reading rfxcom device (disconnected ?) : %s" % traceback.format_exc()
+                error = "Error while reading bugone device (disconnected ?) : %s" % traceback.format_exc()
                 self.log.error(u"{0}".format(error))
                 self.bugone_opened = False
                 if self.autoreconnect:
