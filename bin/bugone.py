@@ -89,7 +89,7 @@ class BugOneManager(XplPlugin):
                     """
                     # Get name for the first feature. 
                     sensortype = self.get_parameter_for_feature(dev,"xpl_stats",feat,"type")
-                    self.existing_devices[(nodeid,devid)] = { "name" : name, "sensortype": sensortype }
+                    self.existing_devices[(nodeid,devid)] = { "name" : name, "sensortype": sensortype, "last_value" : None}
 
                     self.log.info("Device id " + str(devid) + " at node " + str(nodeid))
                 elif devtype == "bugone.node":

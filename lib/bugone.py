@@ -70,15 +70,17 @@ class BugOneException(Exception):
 
 class BugOneNode():
 
-    def __init__(self, nodeid, timeout, log, manager, send_queue, callback_status, interval = 0, name = ""):
+    def __init__(self, nodeid, log, manager, send_queue, callback_status, timeout = 0, name = ""):
         self._nodeid = nodeid
         self._xpl_manager = manager
+        # Store if node is ready to receive or not
         self._status = False
+        # Store if node has been seen recently or not
+        self._up = True
         self._timeout_interval = timeout * 60 
         self._sniffer_queue = send_queue
         self._message_queue = deque()
         self.log = log
-        self._interval = timeout * 60
         self._name = ""
         self._last_timeout = 0
         self._callback_status = callback_status
@@ -86,7 +88,7 @@ class BugOneNode():
             self._name = "node"+str(nodeid)
         else:
             self._name = name
-        self.log.info(u"*** Initialized BugoneNode for node %s with name %s and interval %s***" % (str(nodeid), self._name, str(interval)))
+        self.log.info(u"*** Initialized BugoneNode for node %s with name %s and timeout %s***" % (str(nodeid), self._name, str(timeout)))
         if self._timeout_interval > 0:
             self._timeout_timer = XplTimer(60, self.timeout, manager)
             self._timeout_timer.start()
@@ -98,16 +100,23 @@ class BugOneNode():
         self._status = False
 
     def init_timeout(self):
-        self._last_timeout = time.time()
-        self.log.info("Last Timeout : %s" % str(self._last_timeout))
-        self._callback_status(self._nodeid, True)
+        if self._timeout_interval > 0:
+            self._last_timeout = time.time()
+            self.log.info("Last Timeout : %s" % str(self._last_timeout))
+            if not self._up:
+                self._up  = True
+                self._callback_status(self._nodeid, True)
 
     def timeout(self):
         if (time.time() - self._last_timeout) > self._timeout_interval: 
             self.log.info("Last seen : %s" % str(time.time() - self._last_timeout))
-            self._callback_status(self._nodeid, False)
+            if self._up:
+                self._up  = False
+                self._callback_status(self._nodeid, False)
         else:
-            self._callback_status(self._nodeid, True)
+            if not self._up:
+                self._up  = True
+                self._callback_status(self._nodeid, True)
 
     def enable(self): 
         #if self._timer_running:
@@ -159,7 +168,7 @@ class BugOne():
 #       self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
         self._nodes = {}
         for i in self.managed_nodes:
-            self._nodes[i] = BugOneNode(int(i),self.managed_nodes[i]["interval"],self.log,self.manager,self.send_queue,self.send_node_status, interval = self.managed_nodes[i]["interval"],name = self.managed_nodes[i]["name"])
+            self._nodes[i] = BugOneNode(int(i),self.log,self.manager,self.send_queue,self.send_node_status, timeout = self.managed_nodes[i]["interval"],name = self.managed_nodes[i]["name"])
 
 
 
@@ -299,7 +308,9 @@ class BugOne():
                     (srcNodeId, srcDevice, destNodeId, destDevice, value))
                 if (srcNodeId,srcDevice) in self.registered_devices:
                     dev = self.registered_devices[(srcNodeId,srcDevice)]
-                    self.report_status(dev,value)
+                    if dev["last_value"] != value:
+                        dev["last_value"] = value
+                        self.report_status(dev,value)
         elif messageType == PACKET_SLEEP:
             self.log.info("Sleep packet")
             self._update_status(srcNodeId,False)
@@ -309,7 +320,7 @@ class BugOne():
     def _update_status(self,nodeid,status):
         if nodeid not in self._nodes:
             # Default timeout is 1hour
-            self._nodes[nodeid] = BugOneNode(int(nodeid),60,self.log,self.manager,self.send_queue,self.send_node_status)
+            self._nodes[nodeid] = BugOneNode(int(nodeid),self.log,self.manager,self.send_queue,self.send_node_status)
         if status: 
             if not self._nodes[nodeid].status():
                 self.log.info(u"*** Node %s waking up...***" % nodeid)
