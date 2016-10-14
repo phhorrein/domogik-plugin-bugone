@@ -9,7 +9,20 @@ PACKET_PONG   = 0x03
 PACKET_GET    = 0x04
 PACKET_SET    = 0x05
 PACKET_VALUES = 0x06
-PACKET_SLEEP = 0x06
+PACKET_SLEEP = 0x07
+PACKET_GETCONFIG = 0x08
+PACKET_CONFIG = 0x09
+
+APP_TEMPERATURE = 0 
+APP_HUMIDITY = 1 
+APP_BATTERY = 2 
+APP_BANDGAP = 3 
+APP_EVENT = 4 
+APP_SWITCH = 5 
+APP_LUM = 6 
+APP_DIMMER = 7 
+APP_CONFIG = 8 
+
 
 ### Read packet ###
 
@@ -51,6 +64,18 @@ def readValues(data):
 			break
 		values.append((srcDevice, destDevice, value))
 	return values
+
+def readConfigs(data):
+    configs = []
+    num = ord(data[0])
+    data = data[1:]
+    while num > 0:
+        srcDevice = ord(data[0])
+        srcType = ord(data[1])
+        data = data[2:]
+        configs.append((srcDevice, srcType))
+        num = num - 1
+    return configs
 
 def writeValues(values):
 	data = ""

@@ -47,14 +47,6 @@ import domogik.tests.common.testserial as testserial
 import domogik_packages.plugin_bugone.lib.bugoneprotocol as bugoneprotocol
 import glob, os, string
 
-PACKET_HELLO  = 0x01
-PACKET_PING   = 0x02
-PACKET_PONG   = 0x03
-PACKET_GET    = 0x04
-PACKET_SET    = 0x05
-PACKET_VALUES = 0x06
-PACKET_SLEEP  = 0x07
-
 
 class BugOneException(Exception):
     """
@@ -145,7 +137,7 @@ class BugOneNode():
 
 class BugOne():
 
-    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, managed_nodes, cb_register_thread, manager, fake_device = None):
+    def __init__(self, bugone_port, autoreconnect, log, cb_send_xpl, stop, registered_devices, managed_nodes, cb_register_thread, cb_device_detected, manager, fake_device = None):
         self.log = log
         self.stop = stop
         self.manager = manager
@@ -157,6 +149,7 @@ class BugOne():
 
         self.cb_send_xpl = cb_send_xpl
         self.cb_register_thread = cb_register_thread
+        self.cb_device_detected = cb_device_detected
 
         self.send_queue = Queue()
 
@@ -308,14 +301,46 @@ class BugOne():
                     (srcNodeId, srcDevice, destNodeId, destDevice, value))
                 if (srcNodeId,srcDevice) in self.registered_devices:
                     dev = self.registered_devices[(srcNodeId,srcDevice)]
-                    if dev["last_value"] != value:
-                        dev["last_value"] = value
-                        self.report_status(dev,value)
-        elif messageType == PACKET_SLEEP:
+                    #if dev["last_value"] != value:
+                    #    dev["last_value"] = value
+                    #    self.report_status(dev,value)
+                    self.report_status(dev,value)
+        elif messageType == bugoneprotocol.PACKET_SLEEP:
             self.log.info("Sleep packet")
             self._update_status(srcNodeId,False)
+        elif messageType == bugoneprotocol.PACKET_CONFIG:
+            self._update_status(srcNodeId,True)
+            configs = bugoneprotocol.readConfigs(bugoneprotocol.getPacketData(message))
+            for (srcDevice, srcType) in configs: 
+                self.log.info("Node has device %s with type %s" % (str(srcDevice),str(srcType)))
+                data = self._process_device_type(srcNodeId,srcDevice,srcType)
+                self.cb_device_detected(data)
         else:
             self.log.info([hex(ord(i)) for i in bugoneprotocol.getPacketData(message)])
+
+    def _process_device_type(self,srcNodeId,srcDevice,srcType):
+        data = {}
+        data["xpl"] = []
+        data["xpl_stats"] = []
+        data["xpl_commands"] = []
+        data["reference"] = "dev"+str(srcNodeId)+"_"+str(srcDevice)
+        data["device"] = data["reference"]
+        data["global"] = []
+        data["global"].append({"key":"nodeid","value":srcNodeId})
+        if srcType == bugoneprotocol.APP_TEMPERATURE:
+            data["global"].append({"key":"devid","value":srcDevice})
+            data["device_type"] = "bugone.temperature"
+        elif srcType == bugoneprotocol.APP_HUMIDITY:
+            data["global"].append({"key":"devid","value":srcDevice})
+            data["device_type"] = "bugone.humidity"
+        elif srcType == bugoneprotocol.APP_BATTERY:
+            data["global"].append({"key":"batid","value":srcDevice})
+            data["device_type"] = "bugone.node"
+            data["global"].append({"key":"interval","value":30})
+        else:
+            data["global"].append({"key":"devid","value":srcDevice})
+            data["device_type"] = ""
+        return data
 
     def _update_status(self,nodeid,status):
         if nodeid not in self._nodes:
@@ -343,4 +368,4 @@ class BugOne():
         self.cb_send_xpl(schema = "sensor.basic", 
                 data = {"device" : device["name"],
                     "type" : device["sensortype"],
-                    "current" : float(value)/10})
+                    "current" : float(value)})

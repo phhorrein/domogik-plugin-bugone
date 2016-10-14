@@ -102,7 +102,7 @@
 			 "id": "bugone.node",
 			 "name": "BugNode",
 			 "commands": [],
-			 "sensors" : ["ping"],
+			 "sensors" : ["ping", "battery"],
 			 "parameters": [
 				 {
 					 "key": "device",
@@ -114,6 +114,12 @@
 					 "key": "nodeid",
 					 "xpl": false,
 					 "description": "The ID of the node to check",
+					 "type": "integer"
+				 },
+				 {
+					 "key": "batid",
+					 "xpl": false,
+					 "description": "The ID of the battery device",
 					 "type": "integer"
 				 },
 				 {
@@ -166,6 +172,26 @@
 				 ]
 			 }
 		 },
+		 "battery": {
+			 "name": "Receive battery status",
+			 "schema": "sensor.basic",
+			 "parameters": {
+				 "static": [
+					 {
+						 "key": "type",
+						 "value": "voltage"
+					 }
+				 ],
+				 "device": [],
+				 "dynamic": [
+					 {
+						 "key": "current",
+						 "ignore_values": "",
+						 "sensor": "battery"
+					 }
+				 ]
+			 }
+		 },
 		 "ping": {
 			 "name": "Ping status",
 			 "schema": "sensor.basic",
@@ -191,7 +217,7 @@
 		"temperature": {
 			"name": "Temperature",
 			"data_type": "DT_Temp",
-			"conversion": "",
+			"conversion": "from_bugone_to_DT_Temp",
 			"incremental": false,
 			"timeout": 7200,
 			"history": {
@@ -205,9 +231,23 @@
 		"humidity": {
 			"name": "Humidity",
 			"data_type": "DT_Humidity",
-			"conversion": "",
+			"conversion": "from_bugone_to_DT_Humidity",
 			"incremental": false,
 			"timeout": 7200,
+			"history": {
+				"store": true,
+				"duplicate": true,
+				"max": 0,
+				"expire": 0,
+				"round_value": 0
+			}
+		},
+		"battery": {
+			"name": "Battery",
+			"data_type": "DT_Volt",
+			"conversion": "from_bugone_to_DT_Volt",
+			"incremental": false,
+			"timeout": 0,
 			"history": {
 				"store": true,
 				"duplicate": true,

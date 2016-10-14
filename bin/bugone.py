@@ -95,16 +95,18 @@ class BugOneManager(XplPlugin):
                 elif devtype == "bugone.node":
                     nodeid = self.get_parameter(dev,"nodeid")
                     interval = self.get_parameter(dev,"interval")
+                    batid = self.get_parameter(dev,"batid")
                     feat = dev['xpl_stats'].iterkeys().next()
                     name = self.get_parameter_for_feature(dev,"xpl_stats",feat,"device")
                     self.managed_nodes[nodeid] = { "name": name, "interval": interval}
+                    self.existing_devices[(nodeid,batid)] = {"name": name, "sensortype": "voltage", "last_value": None}
                     self.log.info(u"***Managing node " + str(nodeid) + " with name " + name + "***")
             except:
                 self.log.error(traceback.format_exc())
 
         # Initialize bugOne manager
 
-        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.managed_nodes,self.register_thread, self.myxpl)
+        self.bugOne_manager = BugOne(self.bugone_port,self.autoreconnect,self.log, self.send_xpl,self.get_stop,self.existing_devices,self.managed_nodes,self.register_thread, self.device_detected, self.myxpl)
 
         self.recv_thread = threading.Thread(None, self.bugOne_manager.listen,"bugone_listen",(self.get_stop(),), {})
         self.register_thread(self.recv_thread)
