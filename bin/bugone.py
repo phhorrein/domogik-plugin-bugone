@@ -73,7 +73,7 @@ class BugOneManager(XplPlugin):
         for dev in self.devices:
             try: 
                 devtype = dev["device_type_id"]
-                if devtype == "bugone.temperature" or devtype == "bugone.humidity":
+                if devtype == "bugone.temperature" or devtype == "bugone.humidity" or devtype == "bugone.switch":
                     nodeid = self.get_parameter(dev,"nodeid")
                     devid = self.get_parameter(dev,"devid")
                     """ Get first feature key 
@@ -115,8 +115,34 @@ class BugOneManager(XplPlugin):
         self.recv_thread.start()
         self.send_thread.start()
 
+        Listener(self.process_control, self.myxpl,
+                 {'schema': 'control.basic',
+                  'xpltype': 'xpl-cmnd'})
+
+
         self.ready()
         self.log.info("Plugin ready :)")
+
+    def process_control(self, message):
+        """ Process command xpl message and call the librairy for processing command
+            @param message : xpl message
+
+        """
+        try:
+            self.log.debug(u"Processing cmnd: %s" % (message))
+            devname = message.data["device"]
+            device = (0,0)
+            for key in self.existing_devices:
+                self.log.debug("Searching for %s in %s: %s" % (devname,key,self.existing_devices[key]["name"]))
+                if self.existing_devices[key]["name"]==devname:
+                    device = key
+                    break
+            level = int(message.data["command"])
+            #device = (key for key,value in self.existing_devices.items() if value[name]==devname).next()
+            self.log.debug(u"Setting switch: %s with %s" % (device,level))
+            self.bugOne_manager.set_switch(device, level)
+        except:
+            self.log.error(traceback.format_exc())
 
     def send_xpl(self, message = None, schema = None, data = {}):
         """ Send xPL message on network

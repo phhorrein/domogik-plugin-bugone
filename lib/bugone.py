@@ -333,6 +333,9 @@ class BugOne():
         elif srcType == bugoneprotocol.APP_HUMIDITY:
             data["global"].append({"key":"devid","value":srcDevice})
             data["device_type"] = "bugone.humidity"
+        elif srcType == bugoneprotocol.APP_SWITCH:
+            data["global"].append({"key":"devid","value":srcDevice})
+            data["device_type"] = "bugone.switch"
         elif srcType == bugoneprotocol.APP_BATTERY:
             data["global"].append({"key":"batid","value":srcDevice})
             data["device_type"] = "bugone.node"
@@ -355,6 +358,15 @@ class BugOne():
                 self.log.info(u"*** Node %s going to sleep...***" % nodeid)
             self._nodes[nodeid].disable()
 
+    def set_switch(self,device,level):
+        (nodeid,devid) = device
+        if nodeid not in self._nodes:
+            # Default timeout is 1hour
+            self._nodes[nodeid] = BugOneNode(int(nodeid),self.log,self.manager,self.send_queue,self.send_node_status)
+        msg = bugoneprotocol.buildPacket(int(nodeid),bugoneprotocol.PACKET_SET,
+                data=bugoneprotocol.writeValues([(42,int(devid),level),(0xFF,0xFF,0)]))
+        self._nodes[nodeid].send(msg)
+
     def send_node_status(self, nodeid, value): 
         if value: 
             cur = "high"
@@ -364,6 +376,7 @@ class BugOne():
                 data = {"device": self.managed_nodes[nodeid]["name"],
                     "type": "input",
                     "current": cur})
+
     def report_status(self, device, value):
         self.cb_send_xpl(schema = "sensor.basic", 
                 data = {"device" : device["name"],

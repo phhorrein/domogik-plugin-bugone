@@ -97,6 +97,33 @@
 				 }
 			 ]
 		 },
+		 "bugone.switch": {
+			 "description": "Relay-based switch with bugOne",
+			 "id": "bugone.switch",
+			 "name": "Switch",
+			 "commands": ["switch_relay"],
+			 "sensors": ["switch_relay"],
+			 "parameters": [
+				 {
+					 "key": "device",
+					 "xpl": true,
+					 "description": "The name of this device",
+					 "type": "string"
+				 },
+				 {
+					 "key": "nodeid",
+					 "xpl": false,
+					 "description": "The node where we found this device",
+					 "type": "integer"
+				 },
+				 {
+					 "key": "devid",
+					 "xpl": false,
+					 "description": "The device ID in the node",
+					 "type": "integer"
+				 }
+			 ]
+		 },
 		 "bugone.node": {
 			 "description": "Node management for bugOne network",
 			 "id": "bugone.node",
@@ -211,6 +238,26 @@
 					 }
 				 ]
 			 }
+		 },
+		 "switch_relay": {
+			 "name": "Switch",
+			 "schema": "sensor.basic",
+			 "parameters": {
+				 "static": [
+					 {
+						 "key": "type",
+						 "value": "output"
+					 }
+				 ],
+				 "device": [],
+				 "dynamic": [
+					 {
+						 "key": "current",
+						 "ignore_values": "",
+						 "sensor": "switch_relay"
+					 }
+				 ]
+			 }
 		 }
 	 },
 	 "sensors": {
@@ -269,10 +316,51 @@
 				"expire": 0,
 				"round_value": 0
 			}
+		},
+		"switch_relay": {
+			"name": "Switch",
+			"incremental" : false,
+			"data_type": "DT_Switch",
+			"conversion" : "",
+			"timeout" : 0,
+			"history": {
+				"store": true,
+				"duplicate" : false,
+				"max": 0,
+				"expire": 0,
+				"round_value": 0
+			}
 		}
-			
 	 },
-	 "commands": {},
-	 "xpl_commands": {}
+	 "commands": {
+        "switch_relay" : {
+            "name" : "Switch",
+            "return_confirmation" : false,
+            "parameters" : [
+                {
+                    "key" : "command",
+                    "data_type" : "DT_Switch",
+                    "conversion" : ""
+                }
+            ],
+            "xpl_command" : "switch_relay"
+        }
+	 },
+	 "xpl_commands": {
+        "switch_relay" : {
+            "name": "Switch",
+            "schema": "control.basic",
+            "xplstat_name": "switch_relay",
+				"parameters": {
+					"static": [
+						{
+							"key": "type",
+							"value": "output"
+						}
+					],
+					"device": []
+				}
+		  }
+	 }
 
 }
