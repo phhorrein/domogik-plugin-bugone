@@ -189,7 +189,6 @@ class BugOne():
             else:
                 self.bugone = serial.Serial(self.bugone_port, baudrate = 38400, timeout = 1)
                 self.bugone_opened = True
-                self.connect_timer.stop()
         except:
             error = "Error while connecting to sniffer device: %s" % traceback.format_exc()
             self.log.error(u"{0}".format(error))
