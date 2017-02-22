@@ -14,7 +14,7 @@
         "domogik_min_version": "0.4.2", 
         "name": "bugone", 
         "type": "plugin", 
-        "version": "0.2alpha"
+        "version": "0.3"
     }, 
 	 "configuration": [
 		 {

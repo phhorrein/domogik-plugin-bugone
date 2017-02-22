@@ -80,7 +80,7 @@ class BugOneNode():
             self._name = "node"+str(nodeid)
         else:
             self._name = name
-        self.log.info(u"*** Initialized BugoneNode for node %s with name %s and timeout %s***" % (str(nodeid), self._name, str(timeout)))
+        self.log.debug(u"*** Initialized BugoneNode for node %s with name %s and timeout %s***" % (str(nodeid), self._name, str(timeout)))
         if self._timeout_interval > 0:
             self._timeout_timer = XplTimer(60, self.timeout, manager)
             self._timeout_timer.start()
@@ -94,14 +94,14 @@ class BugOneNode():
     def init_timeout(self):
         if self._timeout_interval > 0:
             self._last_timeout = time.time()
-            self.log.info("Last Timeout : %s" % str(self._last_timeout))
+            self.log.debug("Last Timeout : %s" % str(self._last_timeout))
             if not self._up:
                 self._up  = True
                 self._callback_status(self._nodeid, True)
 
     def timeout(self):
         if (time.time() - self._last_timeout) > self._timeout_interval: 
-            self.log.info("Last seen : %s" % str(time.time() - self._last_timeout))
+            self.log.debug("Last seen : %s" % str(time.time() - self._last_timeout))
             if self._up:
                 self._up  = False
                 self._callback_status(self._nodeid, False)
@@ -231,7 +231,7 @@ class BugOne():
             try:
                 while not stop.isSet():
                     message = self.send_queue.get(True)
-                    self.log.info(u"***Message to send in the queue***")
+                    self.log.debug(u"***Message to send in the queue***")
                     if self.bugone_opened: 
                         self.send(message)
                     else:
@@ -264,15 +264,19 @@ class BugOne():
         if (len(buf) != 1):
             return None
         size = ord(buf)
-        self.log.info(u"**** Packet size: %s ****" % size)
         data = self.bugone.read(size)
         if (len(data) != size):
+            self.log.warning("Unexpected data size. Expected %s, got %s. Discarding data" % (size, data))
+            for i in (data+1):
+                self.bugone.read(1);
+            self.log.warning("Serial link flushed")
             return None
         checksum = ord(self.bugone.read())
         c = 0
         for i in data:
             c ^= ord(i)
         if checksum != c:
+            self.log.warning("Something went wrong in serial link")
             return None
         else:
             self._process_received_data(data)
@@ -282,21 +286,21 @@ class BugOne():
         srcNodeId = bugoneprotocol.getPacketSrc(message)
         destNodeId = bugoneprotocol.getPacketDest(message)
         counter = bugoneprotocol.getPacketCounter(message)
-        self.log.info (u"Message [%s] from %s to %s" % (counter, hex(srcNodeId), hex(destNodeId)))
+        self.log.debug (u"Message [%s] from %s to %s" % (counter, hex(srcNodeId), hex(destNodeId)))
         if messageType == bugoneprotocol.PACKET_HELLO:
-            self.log.info("Hello")
+            self.log.debug("Hello")
             self._update_status(srcNodeId,True)
         elif messageType == bugoneprotocol.PACKET_PING:
-            self.log.info("Ping")
+            self.log.debug("Ping")
             self._update_status(srcNodeId,True)
         elif messageType == bugoneprotocol.PACKET_PONG:
-            self.log.info("Pong")
+            self.log.debug("Pong")
             self._update_status(srcNodeId,True)
         elif messageType == bugoneprotocol.PACKET_VALUES:
             self._update_status(srcNodeId,True)
             values = bugoneprotocol.readValues(bugoneprotocol.getPacketData(message))
             for (srcDevice, destDevice, value) in values:
-                self.log.info("- (%s.%s) -> (%s.%s) = %s" % \
+                self.log.debug("(%s.%s) -> (%s.%s) = %s" % \
                     (srcNodeId, srcDevice, destNodeId, destDevice, value))
                 if (srcNodeId,srcDevice) in self.registered_devices:
                     dev = self.registered_devices[(srcNodeId,srcDevice)]
@@ -304,18 +308,20 @@ class BugOne():
                     #    dev["last_value"] = value
                     #    self.report_status(dev,value)
                     self.report_status(dev,value)
+                else:
+                    self.log.debug("Unregistered device %s.%s" % (srcNodeId,srcDevice))
         elif messageType == bugoneprotocol.PACKET_SLEEP:
-            self.log.info("Sleep packet")
+            self.log.debug("Sleep packet")
             self._update_status(srcNodeId,False)
         elif messageType == bugoneprotocol.PACKET_CONFIG:
             self._update_status(srcNodeId,True)
             configs = bugoneprotocol.readConfigs(bugoneprotocol.getPacketData(message))
             for (srcDevice, srcType) in configs: 
-                self.log.info("Node has device %s with type %s" % (str(srcDevice),str(srcType)))
+                self.log.debug("Node has device %s with type %s" % (str(srcDevice),str(srcType)))
                 data = self._process_device_type(srcNodeId,srcDevice,srcType)
                 self.cb_device_detected(data)
         else:
-            self.log.info([hex(ord(i)) for i in bugoneprotocol.getPacketData(message)])
+            self.log.debug([hex(ord(i)) for i in bugoneprotocol.getPacketData(message)])
 
     def _process_device_type(self,srcNodeId,srcDevice,srcType):
         data = {}
@@ -350,11 +356,11 @@ class BugOne():
             self._nodes[nodeid] = BugOneNode(int(nodeid),self.log,self.manager,self.send_queue,self.send_node_status)
         if status: 
             if not self._nodes[nodeid].status():
-                self.log.info(u"*** Node %s waking up...***" % nodeid)
+                self.log.debug(u"*** Node %s waking up...***" % nodeid)
             self._nodes[nodeid].enable()
         else:
             if self._nodes[nodeid].status():
-                self.log.info(u"*** Node %s going to sleep...***" % nodeid)
+                self.log.debug(u"*** Node %s going to sleep...***" % nodeid)
             self._nodes[nodeid].disable()
 
     def set_switch(self,device,level):
